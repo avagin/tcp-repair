@@ -4,9 +4,9 @@ from subprocess import Popen, PIPE
 str1 = "test test test"
 str2 = "Test Test Test"
 
-p1 = Popen(["./tcp-create", "localhost 12342 555 localhost 54322 666", str1], stdout = PIPE)
+p1 = Popen(["./tcp-create", "--saddr", "localhost", "--sport", "12342", "--sseq", "555", "--daddr", "localhost", "--dport", "54322", "--dseq", "666", str1], stdout = PIPE)
 
-p2 = Popen(["./tcp-create", "localhost 54322 666 localhost 12342 555", str2], stdout = PIPE)
+p2 = Popen(["./tcp-create", "--saddr", "localhost", "--sport", "54322", "--sseq",  "666", "--daddr", "localhost", "--dport", "12342", "--dseq", "555", str2], stdout = PIPE)
 
 if p1.wait():
     sys.exit(1)

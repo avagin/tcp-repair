@@ -5,20 +5,58 @@
 #include <linux/socket.h>
 #include <netinet/tcp.h>
 #include <string.h>
+#include <getopt.h>
+#include <stdlib.h>
 
 #define pr_perror(fmt, ...) do { fprintf(stderr, "%s:%d: " fmt " : %m\n", __func__, __LINE__, ##__VA_ARGS__); return 1; } while (0)
 
 int main(int argc, char **argv)
 {
-	unsigned int seq, ack, src_port, dst_port;
-	char src[128], dst[128];
+	static const char short_opts[] = "";
+	static struct option long_opts[] = {
+		{ "saddr",	required_argument, 0, 's' },
+		{ "daddr",	required_argument, 0, 'd' },
+		{ "sport",	required_argument, 0, 'b' },
+		{ "dport",	required_argument, 0, 'p' },
+		{ "sseq",	required_argument, 0, 'S' },
+		{ "dseq",	required_argument, 0, 'A' },
+		{},
+	};
+	unsigned int seq = 500000, ack = 400000;
+	unsigned int src_port = 12345, dst_port = 54321;
+	char *src = "localhost", *dst = "localhost";
 	struct sockaddr_in addr;
-	int sk, yes = 1, val, ret;
+	int sk, yes = 1, val, idx, opt;
 	char buf[1024];
 
-	ret = sscanf(argv[1], "%s %d %d %s %d %d", src, &src_port, &seq, dst, &dst_port, &ack);
-	if (ret != 6)
-		pr_perror("scanf -> %d %s", ret, src);
+	while (1) {
+		idx = -1;
+		opt = getopt_long(argc, argv, short_opts, long_opts, &idx);
+		if (opt == -1)
+			break;
+
+		switch (opt) {
+		case 's':
+			src = optarg;
+			break;
+		case 'd':
+			dst = optarg;
+			break;
+		case 'b':
+			src_port = atol(optarg);
+			break;
+		case 'p':
+			dst_port = atol(optarg);
+			break;
+		case 'S':
+			seq = atol(optarg);
+			break;
+		case 'A':
+			ack = atol(optarg);
+			break;
+		break;
+		}
+	}
 
 	sk = socket(AF_INET, SOCK_STREAM, 0);
 	if (sk < 0)
@@ -65,7 +103,7 @@ int main(int argc, char **argv)
 	if (setsockopt(sk, SOL_TCP, TCP_REPAIR, &val, sizeof(val)))
 		pr_perror("TCP_REPAIR");
 
-	if (write(sk, argv[2], strlen(argv[2])) < 0)
+	if (write(sk, argv[optind], strlen(argv[optind])) < 0)
 		pr_perror("write");
 
 	if (read(sk, buf, sizeof(buf)) < 0)
