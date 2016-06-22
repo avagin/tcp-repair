@@ -1,0 +1,5 @@
+Here is an example how TCP_REPAIR can be used to create a new connection.
+
+An idea is that we create two sockets which is already connected to each other, so we don't need to create a server socket.
+
+https://lwn.net/Articles/495304/
