@@ -98,7 +98,11 @@ int main(int argc, char **argv)
 	if (connect(sk, (struct sockaddr *) &addr, sizeof(addr)))
 		pr_perror("bind");
 
-	sleep(5);
+	if (write(STDOUT_FILENO, "start", 5) != 5)
+		pr_perror("write");
+	if (read(STDIN_FILENO, buf, 5) != 5)
+		pr_perror("read");
+
 	val = 0;
 	if (setsockopt(sk, SOL_TCP, TCP_REPAIR, &val, sizeof(val)))
 		pr_perror("TCP_REPAIR");
