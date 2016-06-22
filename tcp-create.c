@@ -14,6 +14,8 @@ struct tcp {
 	char *addr;
 	uint32_t port;
 	uint32_t seq;
+	uint16_t mss_clamp;
+	uint16_t wscale;
 };
 
 int main(int argc, char **argv)
@@ -28,11 +30,13 @@ int main(int argc, char **argv)
 		{},
 	};
 	struct tcp tcp[2] = {
-				{"localhost", 12345, 5000000},
-				{"localhost", 54321, 6000000}
+				{"localhost", 12345, 5000000, 1460, 7},
+				{"localhost", 54321, 6000000, 1460, 7}
 			};
+
+	int sk, yes = 1, val, idx, opt, i, src = 0, dst = 1, onr = 0;
+	struct tcp_repair_opt opts[4];
 	struct sockaddr_in addr;
-	int sk, yes = 1, val, idx, opt, i, src = 0, dst = 1;
 	char buf[1024];
 
 	i = 0;
@@ -102,7 +106,6 @@ int main(int argc, char **argv)
 	if (setsockopt(sk, SOL_TCP, TCP_QUEUE_SEQ, &val, sizeof(val)))
 		return pr_perror("TCP_QUEUE_SEQ");
 
-
 	/* ============= Bind and connect ================ */
 	memset(&addr,0,sizeof(addr));
 	addr.sin_family = AF_INET;
@@ -121,6 +124,19 @@ int main(int argc, char **argv)
 
 	if (connect(sk, (struct sockaddr *) &addr, sizeof(addr)))
 		return pr_perror("bind");
+
+	opts[onr].opt_code = TCPOPT_WINDOW;
+	opts[onr].opt_val = tcp[src].wscale + (tcp[dst].wscale << 16);
+	onr++;
+
+	opts[onr].opt_code = TCPOPT_MAXSEG;
+	opts[onr].opt_val = tcp[src].mss_clamp;
+	onr++;
+
+	if (setsockopt(sk, SOL_TCP, TCP_REPAIR_OPTIONS,
+			opts, onr * sizeof(struct tcp_repair_opt)) < 0) {
+		return pr_perror("Can't repair options");
+	}
 
 	/* Let's go */
 	if (write(STDOUT_FILENO, "start", 5) != 5)
