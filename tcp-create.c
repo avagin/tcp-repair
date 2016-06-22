@@ -10,25 +10,32 @@
 
 #define pr_perror(fmt, ...) ({ fprintf(stderr, "%s:%d: " fmt " : %m\n", __func__, __LINE__, ##__VA_ARGS__); 1; })
 
+struct tcp {
+	char *addr;
+	uint32_t port;
+	uint32_t seq;
+};
+
 int main(int argc, char **argv)
 {
 	static const char short_opts[] = "";
 	static struct option long_opts[] = {
-		{ "saddr",	required_argument, 0, 's' },
-		{ "daddr",	required_argument, 0, 'd' },
-		{ "sport",	required_argument, 0, 'b' },
-		{ "dport",	required_argument, 0, 'p' },
-		{ "sseq",	required_argument, 0, 'S' },
-		{ "dseq",	required_argument, 0, 'A' },
+		{ "addr",	required_argument, 0, 'a' },
+		{ "port",	required_argument, 0, 'p' },
+		{ "seq",	required_argument, 0, 's' },
+		{ "next",	no_argument, 0, 'n'},
+		{ "reverse",	no_argument, 0, 'r'},
 		{},
 	};
-	unsigned int seq = 500000, ack = 400000;
-	unsigned int src_port = 12345, dst_port = 54321;
-	char *src = "localhost", *dst = "localhost";
+	struct tcp tcp[2] = {
+				{"localhost", 12345, 5000000},
+				{"localhost", 54321, 6000000}
+			};
 	struct sockaddr_in addr;
-	int sk, yes = 1, val, idx, opt;
+	int sk, yes = 1, val, idx, opt, i, src = 0, dst = 1;
 	char buf[1024];
 
+	i = 0;
 	while (1) {
 		idx = -1;
 		opt = getopt_long(argc, argv, short_opts, long_opts, &idx);
@@ -36,32 +43,37 @@ int main(int argc, char **argv)
 			break;
 
 		switch (opt) {
-		case 's':
-			src = optarg;
-			break;
-		case 'd':
-			dst = optarg;
-			break;
-		case 'b':
-			src_port = atol(optarg);
+		case 'a':
+			tcp[i].addr = optarg;
 			break;
 		case 'p':
-			dst_port = atol(optarg);
+			tcp[i].port = atol(optarg);
 			break;
-		case 'S':
-			seq = atol(optarg);
+		case 's':
+			tcp[i].seq = atol(optarg);
 			break;
-		case 'A':
-			ack = atol(optarg);
+		case 'n':
+			i++;
+			if (i > 1)
+				return pr_perror("--next is used twice or more");
 			break;
-		break;
+		case 'r':
+			src = 1; dst = 0;
+			break;
+		default:
+			return 3;
 		}
 	}
+	if (i != 1)
+		return pr_perror("--next is required");
 
 	if (optind == argc) {
-		printf("Usage: --saddr ADDR --daddr ADDR -sport PORT --dport PORT --sseq SEQ --dseq SEQ -- CMD ...");
+		printf("Usage: --addr ADDR -port PORT --seq SEQ --next --addr ADDR -port PORT --seq SEQ -- CMD ...");
 		return 1;
 	}
+
+	for (i = 0; i < 2; i++)
+		fprintf(stderr, "%s:%d:%d\n", tcp[i].addr, tcp[i].port, tcp[i].seq);
 
 	sk = socket(AF_INET, SOCK_STREAM, 0);
 	if (sk < 0)
@@ -74,38 +86,43 @@ int main(int argc, char **argv)
 		return pr_perror("setsockopt");
 
 	/* ============= Restore TCP properties ==================*/
-	val = TCP_RECV_QUEUE;
+	val = TCP_SEND_QUEUE;
 	if (setsockopt(sk, SOL_TCP, TCP_REPAIR_QUEUE, &val, sizeof(val)))
 		return pr_perror("TCP_RECV_QUEUE");
 
-	val = seq;
+	val = tcp[src].seq;
 	if (setsockopt(sk, SOL_TCP, TCP_QUEUE_SEQ, &val, sizeof(val)))
 		return pr_perror("TCP_QUEUE_SEQ");
 
-	val = TCP_SEND_QUEUE;
+	val = TCP_RECV_QUEUE;
 	if (setsockopt(sk, SOL_TCP, TCP_REPAIR_QUEUE, &val, sizeof(val)))
 		return pr_perror("TCP_SEND_QUEUE");
 
-	val = ack;
+	val = tcp[dst].seq;
 	if (setsockopt(sk, SOL_TCP, TCP_QUEUE_SEQ, &val, sizeof(val)))
 		return pr_perror("TCP_QUEUE_SEQ");
 
 
 	/* ============= Bind and connect ================ */
+	memset(&addr,0,sizeof(addr));
 	addr.sin_family = AF_INET;
-	addr.sin_port = src_port;
-	inet_pton(AF_INET, src, &(addr.sin_addr));
+	addr.sin_port = htons(tcp[src].port);
+	if (inet_pton(AF_INET, tcp[src].addr, &(addr.sin_addr)) < 0)
+		return pr_perror("inet_pton");
 
 	if (bind(sk, (struct sockaddr *) &addr, sizeof(addr)))
 		return pr_perror("bind");
 
+	memset(&addr,0,sizeof(addr));
 	addr.sin_family = AF_INET;
-	addr.sin_port = dst_port;
-	inet_pton(AF_INET, dst, &(addr.sin_addr));
+	addr.sin_port = htons(tcp[dst].port);
+	if (inet_pton(AF_INET, tcp[dst].addr, &(addr.sin_addr)) < 0)
+		return pr_perror("inet_pton");
 
 	if (connect(sk, (struct sockaddr *) &addr, sizeof(addr)))
 		return pr_perror("bind");
 
+	/* Let's go */
 	if (write(STDOUT_FILENO, "start", 5) != 5)
 		return pr_perror("write");
 	if (read(STDIN_FILENO, buf, 5) != 5)
