@@ -8,7 +8,7 @@
 #include <getopt.h>
 #include <stdlib.h>
 
-#define pr_perror(fmt, ...) do { fprintf(stderr, "%s:%d: " fmt " : %m\n", __func__, __LINE__, ##__VA_ARGS__); return 1; } while (0)
+#define pr_perror(fmt, ...) ({ fprintf(stderr, "%s:%d: " fmt " : %m\n", __func__, __LINE__, ##__VA_ARGS__); 1; })
 
 int main(int argc, char **argv)
 {
@@ -58,62 +58,64 @@ int main(int argc, char **argv)
 		}
 	}
 
+	if (optind == argc) {
+		printf("Usage: --saddr ADDR --daddr ADDR -sport PORT --dport PORT --sseq SEQ --dseq SEQ -- CMD ...");
+		return 1;
+	}
+
 	sk = socket(AF_INET, SOCK_STREAM, 0);
 	if (sk < 0)
-		pr_perror("socket");
+		return pr_perror("socket");
 
 	if (setsockopt(sk, SOL_TCP, TCP_REPAIR, &yes, sizeof(yes)))
-		pr_perror("TCP_REPAIR");
+		return pr_perror("TCP_REPAIR");
 
 	if (setsockopt(sk, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) == -1)
-		pr_perror("setsockopt");
+		return pr_perror("setsockopt");
 
+	/* ============= Restore TCP properties ==================*/
 	val = TCP_RECV_QUEUE;
 	if (setsockopt(sk, SOL_TCP, TCP_REPAIR_QUEUE, &val, sizeof(val)))
-		pr_perror("TCP_RECV_QUEUE");
+		return pr_perror("TCP_RECV_QUEUE");
 
 	val = seq;
 	if (setsockopt(sk, SOL_TCP, TCP_QUEUE_SEQ, &val, sizeof(val)))
-		pr_perror("TCP_QUEUE_SEQ");
+		return pr_perror("TCP_QUEUE_SEQ");
 
 	val = TCP_SEND_QUEUE;
 	if (setsockopt(sk, SOL_TCP, TCP_REPAIR_QUEUE, &val, sizeof(val)))
-		pr_perror("TCP_SEND_QUEUE");
+		return pr_perror("TCP_SEND_QUEUE");
 
 	val = ack;
 	if (setsockopt(sk, SOL_TCP, TCP_QUEUE_SEQ, &val, sizeof(val)))
-		pr_perror("TCP_QUEUE_SEQ");
+		return pr_perror("TCP_QUEUE_SEQ");
 
+
+	/* ============= Bind and connect ================ */
 	addr.sin_family = AF_INET;
 	addr.sin_port = src_port;
 	inet_pton(AF_INET, src, &(addr.sin_addr));
 
 	if (bind(sk, (struct sockaddr *) &addr, sizeof(addr)))
-		pr_perror("bind");
+		return pr_perror("bind");
 
 	addr.sin_family = AF_INET;
 	addr.sin_port = dst_port;
 	inet_pton(AF_INET, dst, &(addr.sin_addr));
 
 	if (connect(sk, (struct sockaddr *) &addr, sizeof(addr)))
-		pr_perror("bind");
+		return pr_perror("bind");
 
 	if (write(STDOUT_FILENO, "start", 5) != 5)
-		pr_perror("write");
+		return pr_perror("write");
 	if (read(STDIN_FILENO, buf, 5) != 5)
-		pr_perror("read");
+		return pr_perror("read");
 
 	val = 0;
 	if (setsockopt(sk, SOL_TCP, TCP_REPAIR, &val, sizeof(val)))
-		pr_perror("TCP_REPAIR");
+		return pr_perror("TCP_REPAIR");
 
-	if (write(sk, argv[optind], strlen(argv[optind])) < 0)
-		pr_perror("write");
+	execv(argv[optind], argv + optind);
 
-	if (read(sk, buf, sizeof(buf)) < 0)
-		pr_perror("read");
-
-	printf("%s\n", buf);
-
-	return 0;
+	return pr_perror("Unable to exec %s", argv[optind]);
 }
