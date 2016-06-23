@@ -18,6 +18,23 @@ struct tcp {
 	uint16_t wscale;
 };
 
+static void usage()
+{
+	printf(
+		"Usage: --addr ADDR -port PORT --seq SEQ --next --addr ADDR -port PORT --seq SEQ -- CMD ...\n"
+		"\t Describe a source side of a connection, then set the --next option\n"
+		"\t and describe a destination side.\n"
+		"\t --reverse - swap source and destination sides\n"
+		"\t The idea is that the same command line is execute on both sides,\n"
+		"\t but the --reverse is added to one of them.\n"
+		"\n"
+		"\t CMD ... - a user command to handle a socket, which is the descriptor 3.\n"
+		"\n"
+		"\t It prints the \"start\" on stdout when a socket is created and\n"
+		"\t resumes it when you write \"start\" to stdin.\n"
+	);
+}
+
 int main(int argc, char **argv)
 {
 	static const char short_opts[] = "";
@@ -65,6 +82,7 @@ int main(int argc, char **argv)
 			src = 1; dst = 0;
 			break;
 		default:
+			usage();
 			return 3;
 		}
 	}
@@ -72,7 +90,7 @@ int main(int argc, char **argv)
 		return pr_perror("--next is required");
 
 	if (optind == argc) {
-		printf("Usage: --addr ADDR -port PORT --seq SEQ --next --addr ADDR -port PORT --seq SEQ -- CMD ...");
+		usage();
 		return 1;
 	}
 
