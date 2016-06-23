@@ -1,5 +1,7 @@
 CFLAGS += -Wall -g
 
+RUN ?= tcp-constructor
+
 run:
 	./local.sh
 
@@ -9,7 +11,7 @@ clean:
 	rm -f tcp-constructor
 
 test: tcp-constructor
-	python run.py
+	python run.py ./$(RUN)
 
 .PHONY: test
 
