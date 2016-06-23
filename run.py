@@ -17,14 +17,14 @@ dport = os.getenv("TCP_DPORT", "54321")
 ssh_key = os.getenv("TCP_SSHKEY", "")
 
 if src != "localhost":
-    if Popen(["scp", "-i", ssh_key, "tcp-create", "root@%s:" % dst]).wait():
+    if Popen(["scp", "-i", ssh_key, "tcp-constructor", "root@%s:" % dst]).wait():
         sys.exit(1)
     if Popen(["scp", "-i", ssh_key, "tcp-test.py", "root@%s:" % dst]).wait():
         sys.exit(1)
 
     ssh = ["ssh", "-i", ssh_key, "root@%s" % dst]
 
-args = ["./tcp-create",
+args = ["./tcp-constructor",
         "--addr", src, "--port", sport, "--seq", "555",
         "--next",
         "--addr", dst, "--port", dport, "--seq", "666",

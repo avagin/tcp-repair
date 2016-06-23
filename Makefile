@@ -3,12 +3,12 @@ CFLAGS += -Wall -g
 run:
 	./local.sh
 
-tcp-create: tcp-create.c
+tcp-constructor: tcp-constructor.c
 
 clean:
-	rm -f tcp-create
+	rm -f tcp-constructor
 
-test: tcp-create
+test: tcp-constructor
 	python run.py
 
 .PHONY: test
