@@ -8,6 +8,8 @@
 #include <getopt.h>
 #include <stdlib.h>
 
+#include "soccr/soccr.h"
+
 #define pr_perror(fmt, ...) ({ fprintf(stderr, "%s:%d: " fmt " : %m\n", __func__, __LINE__, ##__VA_ARGS__); 1; })
 
 struct tcp {
@@ -51,9 +53,9 @@ int main(int argc, char **argv)
 				{"localhost", 54321, 6000000, 1460, 7}
 			};
 
-	int sk, yes = 1, val, idx, opt, i, src = 0, dst = 1, onr = 0;
-	struct tcp_repair_opt opts[4];
-	struct sockaddr_in addr;
+	int sk, yes = 1, val, idx, opt, i, src = 0, dst = 1;
+	struct libsoccr_sk_data data = {};
+	struct libsoccr_sk *so;
 	char buf[1024];
 
 	i = 0;
@@ -97,64 +99,43 @@ int main(int argc, char **argv)
 	for (i = 0; i < 2; i++)
 		fprintf(stderr, "%s:%d:%d\n", tcp[i].addr, tcp[i].port, tcp[i].seq);
 
+	data.state = TCP_ESTABLISHED;
+	data.inq_seq = tcp[dst].seq;
+	data.outq_seq = tcp[src].seq;
+
 	sk = socket(AF_INET, SOCK_STREAM, 0);
 	if (sk < 0)
 		return pr_perror("socket");
 
-	if (setsockopt(sk, SOL_TCP, TCP_REPAIR, &yes, sizeof(yes)))
-		return pr_perror("TCP_REPAIR");
+	so = libsoccr_pause(sk);
 
 	if (setsockopt(sk, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) == -1)
 		return pr_perror("setsockopt");
 
-	/* ============= Restore TCP properties ==================*/
-	val = TCP_SEND_QUEUE;
-	if (setsockopt(sk, SOL_TCP, TCP_REPAIR_QUEUE, &val, sizeof(val)))
-		return pr_perror("TCP_RECV_QUEUE");
-
-	val = tcp[src].seq;
-	if (setsockopt(sk, SOL_TCP, TCP_QUEUE_SEQ, &val, sizeof(val)))
-		return pr_perror("TCP_QUEUE_SEQ");
-
-	val = TCP_RECV_QUEUE;
-	if (setsockopt(sk, SOL_TCP, TCP_REPAIR_QUEUE, &val, sizeof(val)))
-		return pr_perror("TCP_SEND_QUEUE");
-
-	val = tcp[dst].seq;
-	if (setsockopt(sk, SOL_TCP, TCP_QUEUE_SEQ, &val, sizeof(val)))
-		return pr_perror("TCP_QUEUE_SEQ");
-
 	/* ============= Bind and connect ================ */
-	memset(&addr,0,sizeof(addr));
-	addr.sin_family = AF_INET;
-	addr.sin_port = htons(tcp[src].port);
-	if (inet_pton(AF_INET, tcp[src].addr, &(addr.sin_addr)) < 0)
+	data.src_addr.sin.sin_family = AF_INET;
+	data.src_addr.sin.sin_port = htons(tcp[src].port);
+	if (inet_pton(AF_INET, tcp[src].addr, &data.src_addr.sin.sin_addr) < 0)
 		return pr_perror("inet_pton");
 
-	if (bind(sk, (struct sockaddr *) &addr, sizeof(addr)))
+	if (bind(sk, (struct sockaddr *) &data.src_addr, sizeof(data.src_addr.sin)))
 		return pr_perror("bind");
 
-	memset(&addr,0,sizeof(addr));
-	addr.sin_family = AF_INET;
-	addr.sin_port = htons(tcp[dst].port);
-	if (inet_pton(AF_INET, tcp[dst].addr, &(addr.sin_addr)) < 0)
+	data.dst_addr.sin.sin_family = AF_INET;
+	data.dst_addr.sin.sin_port = htons(tcp[dst].port);
+	if (inet_pton(AF_INET, tcp[dst].addr, &(data.dst_addr.sin.sin_addr)) < 0)
 		return pr_perror("inet_pton");
 
-	if (connect(sk, (struct sockaddr *) &addr, sizeof(addr)))
-		return pr_perror("bind");
+	data.snd_wscale = tcp[src].wscale;
+	data.rcv_wscale = tcp[dst].wscale;
+	data.mss_clamp = tcp[src].mss_clamp;
 
-	opts[onr].opt_code = TCPOPT_WINDOW;
-	opts[onr].opt_val = tcp[src].wscale + (tcp[dst].wscale << 16);
-	onr++;
+	data.opt_mask = TCPI_OPT_WSCALE | TCPOPT_MAXSEG;
 
-	opts[onr].opt_code = TCPOPT_MAXSEG;
-	opts[onr].opt_val = tcp[src].mss_clamp;
-	onr++;
-
-	if (setsockopt(sk, SOL_TCP, TCP_REPAIR_OPTIONS,
-			opts, onr * sizeof(struct tcp_repair_opt)) < 0) {
-		return pr_perror("Can't repair options");
-	}
+	if (libsoccr_set_sk_data_noq(so, &data, sizeof(data)))
+		return 1;
+	if (libsoccr_set_sk_data(so, &data, sizeof(data)))
+		return 1;
 
 	/* Let's go */
 	if (write(STDOUT_FILENO, "start", 5) != 5)
