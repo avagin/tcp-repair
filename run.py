@@ -26,11 +26,16 @@ print sys.argv[1]
 args = [sys.argv[1],
         "--addr", src, "--port", sport, "--seq", "555",
         "--next",
-        "--addr", dst, "--port", dport, "--seq", "666",
-        "--reverse", "--", "./tcp-test.py"]
+        "--addr", dst, "--port", dport, "--seq", "666", "--snd", "xxxxx",
+        "--reverse", "--", "./tcp-test.py", "0"]
 
 p1 = Popen(ssh + args + ["dst"], stdout = PIPE, stdin = PIPE)
 
+args = [sys.argv[1],
+        "--addr", src, "--port", sport, "--seq", "555",
+        "--next",
+        "--addr", dst, "--port", dport, "--seq", "666",
+        "--reverse", "--", "./tcp-test.py", "5"]
 args.remove("--reverse");
 
 p2 = Popen(args + ["src"], stdout = PIPE, stdin = PIPE)

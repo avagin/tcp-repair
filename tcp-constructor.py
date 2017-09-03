@@ -2,7 +2,7 @@
 
 import socket, struct, getopt, sys, os
 
-opts, args = getopt.gnu_getopt(sys.argv, '', ['port=', 'seq=', 'addr=', 'next', 'reverse'])
+opts, args = getopt.gnu_getopt(sys.argv, '', ['port=', 'seq=', 'addr=', 'next', 'reverse', "snd="])
 
 class Tcp:
     def __init__(self):
@@ -15,6 +15,7 @@ class Tcp:
 tcp = Tcp()
 conn = []
 reverse = False
+snd = ""
 
 for k, v in opts:
     if k == "--addr":
@@ -28,6 +29,8 @@ for k, v in opts:
         tcp = Tcp()
     if k == "--reverse":
         reverse = True
+    if k == "--snd":
+        snd = v
 conn.append(tcp)
 
 if reverse:
@@ -74,6 +77,10 @@ opt += struct.pack('=LL', TCPOPT_MSS, int(conn[src].mss))
 #opt += struct.pack('=LL', TCPOPT_TIMESTAMP, 0)
 
 s.setsockopt(socket.SOL_TCP, TCP_REPAIR_OPTIONS, opt)
+
+if snd:
+    s.setsockopt(socket.SOL_TCP, TCP_REPAIR_QUEUE, TCP_SEND_QUEUE)
+    s.send(snd)
 
 #if ts:
 #    ts = struct.pack('=L', int(ts))

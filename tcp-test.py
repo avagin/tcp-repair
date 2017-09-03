@@ -6,6 +6,7 @@ import hashlib
 sk = socket.fromfd(3, socket.AF_INET, socket.SOCK_STREAM)
 
 s = sys.stdin.read()
+sk.recv(int(sys.argv[1]))
 ret = sk.send(s)
 print >> sys.stderr, "%s: send() -> %d" % (sys.argv[1], ret)
 sk.shutdown(socket.SHUT_WR)
@@ -14,6 +15,6 @@ while True:
     s = sk.recv((1 << 20) * 10)
     if not s:
         break
-    print >> sys.stderr, "%s: recv() -> %d" % (sys.argv[1], len(s))
+    print >> sys.stderr, "%s: recv() -> %d, %s" % (sys.argv[1], len(s), s[:5])
     m.update(s)
 print repr(m.hexdigest())
