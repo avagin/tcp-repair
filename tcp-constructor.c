@@ -52,7 +52,7 @@ int main(int argc, char **argv)
 			};
 
 	int sk, yes = 1, val, idx, opt, i, src = 0, dst = 1, onr = 0;
-	struct tcp_repair_opt opts[4];
+	struct tcp_repair_opt opts[5];
 	struct sockaddr_in addr;
 	char buf[1024];
 
@@ -104,9 +104,6 @@ int main(int argc, char **argv)
 	if (setsockopt(sk, SOL_TCP, TCP_REPAIR, &yes, sizeof(yes)))
 		return pr_perror("TCP_REPAIR");
 
-	if (setsockopt(sk, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) == -1)
-		return pr_perror("setsockopt");
-
 	/* ============= Restore TCP properties ==================*/
 	val = TCP_SEND_QUEUE;
 	if (setsockopt(sk, SOL_TCP, TCP_REPAIR_QUEUE, &val, sizeof(val)))
@@ -141,10 +138,28 @@ int main(int argc, char **argv)
 		return pr_perror("inet_pton");
 
 	if (connect(sk, (struct sockaddr *) &addr, sizeof(addr)))
-		return pr_perror("bind");
+		return pr_perror("connect(%s, %d)", tcp[dst].addr, tcp[dst].port);
+
+	socklen_t optsi = sizeof(val);
+	val = TCP_SEND_QUEUE;
+	if (setsockopt(sk, SOL_TCP, TCP_REPAIR_QUEUE, &val, sizeof(val)))
+		return pr_perror("TCP_RECV_QUEUE");
+	if (getsockopt(sk, SOL_TCP, TCP_QUEUE_SEQ, &val, &optsi))
+		return pr_perror("TCP_QUEUE_SEQ");
+	pr_perror("%u %u", tcp[src].seq, val);
+	val = TCP_RECV_QUEUE;
+	if (setsockopt(sk, SOL_TCP, TCP_REPAIR_QUEUE, &val, sizeof(val)))
+		return pr_perror("TCP_RECV_QUEUE");
+	if (getsockopt(sk, SOL_TCP, TCP_QUEUE_SEQ, &val, &optsi))
+		return pr_perror("TCP_QUEUE_SEQ");
+	pr_perror("%u %u", tcp[dst].seq, val);
 
 	opts[onr].opt_code = TCPOPT_WINDOW;
 	opts[onr].opt_val = tcp[src].wscale + (tcp[dst].wscale << 16);
+	onr++;
+
+	opts[onr].opt_code = TCPOPT_TIMESTAMP;
+	opts[onr].opt_val = 0;
 	onr++;
 
 	opts[onr].opt_code = TCPOPT_MAXSEG;
